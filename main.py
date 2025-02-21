@@ -1,8 +1,17 @@
+import os
 from flask import Flask, request, jsonify
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Retrieve API key
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 app = Flask(__name__)
-client = Groq()
+
+client = Groq(api_key=GROQ_API_KEY)  
+
 
 # Store user preferences
 user_preferences = {}
