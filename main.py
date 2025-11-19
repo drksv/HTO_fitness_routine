@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)
 
 client = Groq(api_key=os.getenv("hto_fitness_routine"))
-MODEL = "mistral-7b-instruct"
+MODEL = "llama3-8b"
 
 user_preferences = {}
 
