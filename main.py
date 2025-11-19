@@ -1,68 +1,63 @@
 import os
-import requests
 from flask import Flask, request, jsonify
-from dotenv import load_dotenv
 from flask_cors import CORS
-
-load_dotenv()
-
-HF_API_TOKEN = os.getenv("HF_API_KEY")
-HF_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
-
+from groq import Groq
 
 app = Flask(__name__)
 CORS(app)
 
-# Store user preferences
+client = Groq(api_key=os.getenv("hto_fitness_routine"))
+MODEL = "mistral-7b-instruct"
+
 user_preferences = {}
 
-# Headers for Hugging Face API
-headers = {
-    "Authorization": f"Bearer {HF_API_TOKEN}",
-    "Content-Type": "application/json"
-}
 
-@app.route('/update_preferences', methods=['POST'])
+@app.route("/update_preferences", methods=["POST"])
 def update_preferences():
     data = request.json
     user_id = data.get("user_id", "default")
     user_preferences[user_id] = {
-        "age": data.get("age", "unknown"),
-        "gender": data.get("gender", "unknown"),
-        "activity": data.get("activity", "moderate"),
+        "age": data.get("age"),
+        "gender": data.get("gender"),
+        "activity": data.get("activity")
     }
-    return jsonify({"message": "User preferences updated successfully!"})
+    return jsonify({"message": "Preferences updated"})
 
-@app.route('/chat', methods=['POST'])
+
+@app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
     user_id = data.get("user_id", "default")
-    user_message = data.get("message", "")
-    
-    user_info = user_preferences.get(user_id, {"age": "unknown", "gender": "unknown", "activity": "moderate"})
+    message = data.get("message")
 
-    system_prompt = f"You are a fitness assistant. The user is {user_info['age']} years old, {user_info['gender']}, with a {user_info['activity']} activity level. Respond accordingly."
+    prefs = user_preferences.get(
+        user_id,
+        {"age": "unknown", "gender": "unknown", "activity": "moderate"}
+    )
 
-    full_prompt = f"{system_prompt}\nUser: {user_message}\nAssistant:"
+    system = (
+        f"You are a certified fitness expert. The user is {prefs['age']} years old, "
+        f"{prefs['gender']}, and has a {prefs['activity']} activity level. "
+        f"Give clear workout routines, reps, timings, safety corrections."
+    )
 
-    payload = {
-        "inputs": full_prompt,
-        "parameters": {
-            "max_new_tokens": 200,
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "return_full_text": False
-        }
-    }
+    reply = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": message}
+        ],
+        max_tokens=250,
+        temperature=0.7
+    ).choices[0].message["content"]
 
-    response = requests.post(HF_API_URL, headers=headers, json=payload)
+    return jsonify({"response": reply})
 
-    if response.status_code == 200:
-        output_text = response.json()[0]['generated_text']
-        return jsonify({"response": output_text})
-    else:
-        return jsonify({"error": "Failed to get response from Hugging Face API", "details": response.text}), 500
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
+@app.route("/", methods=["GET"])
+def home():
+    return "Fitness API Running"
 
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)
