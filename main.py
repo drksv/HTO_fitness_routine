@@ -6,8 +6,8 @@ from groq import Groq
 app = Flask(__name__)
 CORS(app)
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY_MEAL"))
-MODEL = "llama-3.1-8b-instant"
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+MODEL = "mistral-7b-instant"
 
 
 user_preferences = {}
