@@ -1,4 +1,4 @@
-import os 
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
@@ -7,63 +7,31 @@ app = Flask(__name__)
 CORS(app)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = "llama-3.3-8b-instant"
- 
-
-user_preferences = {}
-
-
-@app.route("/update_preferences", methods=["POST"])
-def update_preferences():
-    data = request.json
-    user_id = data.get("user_id", "default")
-    user_preferences[user_id] = {
-        "age": data.get("age"),
-        "gender": data.get("gender"),
-        "activity": data.get("activity")
-    }
-    return jsonify({"message": "Preferences updated"})
+MODEL = "llama-3.1-8b-instant"
 
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.json
-    user_id = data.get("user_id", "default")
-    message = data.get("message")
-
-    prefs = user_preferences.get(
-        user_id,
-        {"age": "unknown", "gender": "unknown", "activity": "moderate"}
-    )
-
-    # System prompt with user preferences
-    system_message = (
-        f"You are a certified fitness expert. The user is {prefs['age']} years old, "
-        f"{prefs['gender']}, and has a {prefs['activity']} activity level. "
-        f"Provide specific workout routines with reps, sets, timings, and safety corrections."
-    )
-
     try:
-        groq_response = client.chat.completions.create(
+        data = request.json
+        message = data.get("message")
+
+        response = client.chat.completions.create(
             model=MODEL,
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": message}
-            ],
-            max_tokens=250,
-            temperature=0.7
+            messages=[{"role": "user", "content": message}],
+            max_tokens=700,
+            temperature=0.8
         )
 
-        reply = groq_response.choices[0].message["content"]
-
+        reply = response.choices[0].message["content"]
         return jsonify({"response": reply})
 
     except Exception as e:
-        print("ERROR:", e)
+        print("SERVER ERROR:", e)
         return jsonify({"error": "Groq API failed", "details": str(e)}), 500
 
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
     return "Fitness API Running"
 
