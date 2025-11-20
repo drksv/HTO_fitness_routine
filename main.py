@@ -12,22 +12,39 @@ MODEL = "llama-3.1-8b-instant"
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    try:
-        data = request.json
-        message = data.get("message")
+    data = request.json
+    user_id = data.get("user_id", "default")
+    message = data.get("message")
 
-        response = client.chat.completions.create(
+    prefs = user_preferences.get(
+        user_id,
+        {"age": "unknown", "gender": "unknown", "activity": "moderate"}
+    )
+
+    system_message = (
+        f"You are a certified fitness expert. The user is {prefs['age']} years old, "
+        f"{prefs['gender']}, and has a {prefs['activity']} activity level. "
+        f"Provide specific workout routines with reps, sets, timings, and safety corrections."
+    )
+
+    try:
+        groq_response = client.chat.completions.create(
             model=MODEL,
-            messages=[{"role": "user", "content": message}],
-            max_tokens=700,
-            temperature=0.8
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": message}
+            ],
+            max_tokens=250,
+            temperature=0.7
         )
 
-        reply = response.choices[0].message["content"]
+        # FIXED LINE
+        reply = groq_response.choices[0].message.content
+
         return jsonify({"response": reply})
 
     except Exception as e:
-        print("SERVER ERROR:", e)
+        print("ERROR:", e)
         return jsonify({"error": "Groq API failed", "details": str(e)}), 500
 
 
