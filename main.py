@@ -9,13 +9,11 @@ user_preferences = {}
 app = Flask(__name__)
 CORS(app)
 
-# ----------------- CHECK API KEY AVAILABILITY -----------------
+# ----------------- FIX 2: CHECK API KEY AVAILABILITY -----------------
 api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
-    print("WARNING: GROQ_API_KEY environment variable is not set. API calls may fail.")
+    print("WARNING: GROQ_API_KEY environment variable is not set.")
 
-# Attempt to initialize client with the key (may be None)
-# In a robust app, this would also be wrapped in a try/except.
 client = Groq(api_key=api_key)
 
 MODEL = "llama-3.1-8b-instant"
@@ -35,7 +33,6 @@ def chat():
         {"age": "unknown", "gender": "unknown", "activity": "moderate"}
     )
 
-    # Note: Storing defaults back into the dict is fine for an in-memory solution
     user_preferences[user_id] = prefs
 
     system_message = (
@@ -56,14 +53,13 @@ def chat():
             temperature=0.7
         )
 
-        # ------------------- CRITICAL FIX: Use dot notation -------------------
-        reply = groq_response.choices[0].message.content 
+        # ------- FIX: ACCESS MESSAGE CONTENT SAFELY -------
+        reply = groq_response.choices[0].message["content"]
 
         return jsonify({"response": reply})
 
     except Exception as e:
         print(f"ERROR processing Groq API request: {e}")
-        # Return a 500 error if the API call fails
         return jsonify({"error": "Groq API failed", "details": str(e)}), 500
 
 
