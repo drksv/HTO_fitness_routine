@@ -3,43 +3,62 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 
-# ----------------- FIX 1: DEFINE THE DICTIONARY (IN-MEMORY FIX) -----------------
+app = Flask(__name__)
+
+# Wide-open CORS for testing + preflight support
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+@app.after_request
+def after_request(response):
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    return response
+
+# Memory store
 user_preferences = {}
 
-app = Flask(__name__)
-CORS(app)
-
-# ----------------- FIX 2: CHECK API KEY AVAILABILITY -----------------
+# Groq client
 api_key = os.getenv("GROQ_API_KEY")
-if not api_key:
-    print("WARNING: GROQ_API_KEY environment variable is not set.")
-
 client = Groq(api_key=api_key)
-
 MODEL = "llama-3.1-8b-instant"
 
 
-@app.route("/chat", methods=["POST"])
+@app.route("/update_preferences", methods=["POST", "OPTIONS"])
+def update_preferences():
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+
+    data = request.json
+    user_id = data.get("user_id", "default_user_123")
+
+    user_preferences[user_id] = {
+        "age": data.get("age"),
+        "gender": data.get("gender"),
+        "activity": data.get("activity")
+    }
+
+    return jsonify({"message": "Preferences updated"})
+
+
+@app.route("/chat", methods=["POST", "OPTIONS"])
 def chat():
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+
     data = request.json
     message = data.get("message")
     user_id = data.get("user_id", "default_user_123")
-
-    if not message:
-        return jsonify({"error": "No message provided"}), 400
 
     prefs = user_preferences.get(
         user_id,
         {"age": "unknown", "gender": "unknown", "activity": "moderate"}
     )
 
-    user_preferences[user_id] = prefs
-
     system_message = (
         f"You are a certified fitness expert. The user is {prefs['age']} years old, "
-        f"{prefs['gender']}, with a {prefs['activity']} activity level. "
-        f"Give workout routines with reps, sets, timing, posture corrections. "
-        f"Keep it concise and action-oriented."
+        f"{prefs['gender']}, and has a {prefs['activity']} activity level. "
+        f"Provide specific workout routines with reps, sets, timings, and safety corrections."
     )
 
     try:
@@ -49,17 +68,16 @@ def chat():
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": message}
             ],
-            max_tokens=500,
+            max_tokens=250,
             temperature=0.7
         )
 
-        # ------- FIX: ACCESS MESSAGE CONTENT SAFELY -------
-        reply = groq_response.choices[0].message["content"]
+        reply = groq_response.choices[0].message.content
 
         return jsonify({"response": reply})
 
     except Exception as e:
-        print(f"ERROR processing Groq API request: {e}")
+        print("ERROR:", e)
         return jsonify({"error": "Groq API failed", "details": str(e)}), 500
 
 
@@ -69,5 +87,4 @@ def home():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=5001)
