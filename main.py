@@ -2,11 +2,17 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
+import os
+import psycopg2
+
+
 
 app = Flask(__name__)
 
 # Wide-open CORS for testing + preflight support
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 @app.after_request
 def after_request(response):
@@ -23,6 +29,31 @@ api_key = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key)
 MODEL = "llama-3.1-8b-instant"
 
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
+
+def save_routine(user_id, prompt, routine):
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO fitness_routines
+        (user_id, prompt, routine)
+        VALUES (%s, %s, %s)
+        """,
+        (
+            user_id,
+            prompt,
+            routine
+        )
+    )
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
 
 @app.route("/update_preferences", methods=["POST", "OPTIONS"])
 def update_preferences():
@@ -74,12 +105,52 @@ def chat():
 
         reply = groq_response.choices[0].message.content
 
-        return jsonify({"response": reply})
+        save_routine(
+            user_id,
+            message,
+            reply
+        )
+        
+        return jsonify({
+            "response": reply
+        })
 
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"error": "Groq API failed", "details": str(e)}), 500
 
+@app.route("/routines/<user_id>", methods=["GET"])
+def get_routines(user_id):
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT id,prompt,routine,created_at
+        FROM fitness_routines
+        WHERE user_id=%s
+        ORDER BY created_at DESC
+        """,
+        (user_id,)
+    )
+
+    rows = cur.fetchall()
+
+    results = []
+
+    for row in rows:
+        results.append({
+            "id": row[0],
+            "prompt": row[1],
+            "routine": row[2],
+            "created_at": str(row[3])
+        })
+
+    cur.close()
+    conn.close()
+
+    return jsonify(results)
 
 @app.route("/")
 def home():
